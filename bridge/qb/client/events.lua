@@ -8,8 +8,8 @@ end)
 
 RegisterNetEvent('QBCore:Client:VehicleInfo', function(info)
     local vehicle = NetworkGetEntityFromNetworkId(info.netId)
-    local plate = GetPlate(vehicle)
-    local hasKeys = config.hasKeys()
+    local plate = qbx.getVehiclePlate(vehicle)
+    local hasKeys = config.hasKeys(plate, vehicle)
 
     local data = {
         vehicle = vehicle,
@@ -22,4 +22,16 @@ RegisterNetEvent('QBCore:Client:VehicleInfo', function(info)
     }
 
     TriggerEvent('QBCore:Client:'..info.event..'Vehicle', data)
+end)
+
+AddStateBagChangeHandler('hunger', ('player:%s'):format(cache.serverId), function(_, _, value)
+    TriggerEvent('hud:client:UpdateNeeds', value, LocalPlayer.state.thirst)
+end)
+
+AddStateBagChangeHandler('thirst', ('player:%s'):format(cache.serverId), function(_, _, value)
+    TriggerEvent('hud:client:UpdateNeeds', LocalPlayer.state.hunger, value)
+end)
+
+AddStateBagChangeHandler('stress', ('player:%s'):format(cache.serverId), function(_, _, value)
+    TriggerEvent('hud:client:UpdateStress', value)
 end)
