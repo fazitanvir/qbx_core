@@ -1,19 +1,29 @@
 -- Player load and unload handling
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
     ShutdownLoadingScreenNui()
-    LocalPlayer.state:set('isLoggedIn', true, false)
     QBX.IsLoggedIn = true
 
     if GlobalState.PVPEnabled then
         SetCanAttackFriendly(cache.ped, true, false)
         NetworkSetFriendlyFireOption(true)
     end
+
+    NetworkEndTutorialSession()
+
+    while NetworkIsInTutorialSession() do
+        Wait(0)
+    end
+
+    local motd = GetConvar('qbx:motd', '')
+    if motd ~= '' then
+        exports.chat:addMessage({ template = motd })
+    end
 end)
 
 ---@param val PlayerData
 RegisterNetEvent('QBCore:Player:SetPlayerData', function(val)
     local invokingResource = GetInvokingResource()
-    if invokingResource and invokingResource ~= GetCurrentResourceName() then return end
+    if invokingResource and invokingResource ~= cache.resource then return end
     QBX.PlayerData = val
 end)
 
@@ -22,6 +32,7 @@ RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
 end)
 
 ---@param value boolean
+---@diagnostic disable-next-line: param-type-mismatch
 AddStateBagChangeHandler('PVPEnabled', nil, function(bagName, _, value)
     if bagName == 'global' then
         SetCanAttackFriendly(cache.ped, value, false)
@@ -33,6 +44,8 @@ end)
 
 ---@param coords vector3
 RegisterNetEvent('QBCore:Command:TeleportToPlayer', function(coords)
+    if GetInvokingResource() then return end
+
     SetPedCoordsKeepVehicle(cache.ped, coords.x, coords.y, coords.z)
 end)
 
@@ -41,6 +54,8 @@ end)
 ---@param z number
 ---@param h number
 RegisterNetEvent('QBCore:Command:TeleportToCoords', function(x, y, z, h)
+    if GetInvokingResource() then return end
+    
     SetPedCoordsKeepVehicle(cache.ped, x, y, z)
     SetEntityHeading(cache.ped, h or GetEntityHeading(cache.ped))
 end)
@@ -49,7 +64,7 @@ end)
 RegisterNetEvent('QBCore:Command:GoToMarker', function()
     local blipMarker <const> = GetFirstBlipInfoId(8)
     if not DoesBlipExist(blipMarker) then
-        Notify(Lang:t("error.no_waypoint"), 'error')
+        Notify(locale('error.no_waypoint'), 'error')
         return 'marker'
     end
 
@@ -120,35 +135,24 @@ RegisterNetEvent('QBCore:Command:GoToMarker', function()
         -- If we can't find the coords, set the coords to the old ones.
         -- We don't unpack them before since they aren't in a loop and only called once.
         SetPedCoordsKeepVehicle(ped, oldCoords.x, oldCoords.y, oldCoords.z - 1.0)
-        Notify(Lang:t("error.tp_error"), 'error')
+        Notify(locale('error.tp_error'), 'error')
     end
 
     -- If Z coord was found, set coords in found coords.
     SetPedCoordsKeepVehicle(ped, x, y, groundZ)
-    Notify(Lang:t("success.teleported_waypoint"), 'success')
+    Notify(locale('success.teleported_waypoint'), 'success')
 end)
 
 -- Vehicle Commands
 
-RegisterNetEvent('qbx_core:client:vehicleSpawned', function(netId, props)
-    local veh = NetworkGetEntityFromNetworkId(netId)
+lib.callback.register('qbx_core:client:getVehiclesInRadius', function(radius)
+    local vehicles = lib.getNearbyVehicles(GetEntityCoords(cache.ped), radius or 5, true)
 
-    for i = -1, 0 do
-        local ped = GetPedInVehicleSeat(veh, i)
-        if ped ~= cache.ped and ped > 0 and NetworkGetEntityOwner(ped) == cache.playerId then
-            DeleteEntity(ped)
-        end
+    for i = 1, #vehicles do
+        vehicles[i] = VehToNet(vehicles[i].vehicle)
     end
 
-    if props then
-        lib.setVehicleProperties(veh, props)
-    end
-end)
-
-lib.callback.register('qbx_core:client:getNearestVehicle', function()
-    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5)
-
-    return vehicle and VehToNet(vehicle)
+    return vehicles
 end)
 
 -- Other stuff
@@ -162,6 +166,7 @@ end)
 
 ---@param bagName string
 ---@param value string
+---@diagnostic disable-next-line: param-type-mismatch
 AddStateBagChangeHandler('me', nil, function(bagName, _, value)
     if not value then return end
 
@@ -182,7 +187,7 @@ AddStateBagChangeHandler('me', nil, function(bagName, _, value)
         local displayTime = 5000 + GetGameTimer()
         while displayTime > GetGameTimer() do
             playerPed = isLocalPlayer and cache.ped or GetPlayerPed(playerId)
-            DrawText3D(value, GetEntityCoords(playerPed))
+            qbx.drawText3d({text = value, coords = GetEntityCoords(playerPed)})
             Wait(0)
         end
     end)
@@ -204,4 +209,53 @@ RegisterNetEvent('QBCore:Client:OnSharedUpdateMultiple', function(tableName, val
         QBX.Shared[tableName][key] = value
     end
     TriggerEvent('QBCore:Client:UpdateObject')
+end)
+
+-- Set vehicle props
+---@param netId number
+---@param props table<any, any>
+RegisterNetEvent('qbx_core:client:setVehicleProperties', function(netId, props)
+    if not props then return end
+    local timeOut = GetGameTimer() + 1000
+    local vehicle = NetworkGetEntityFromNetworkId(netId)
+    while true do
+        if NetworkGetEntityOwner(vehicle) == cache.playerId then
+            if lib.setVehicleProperties(vehicle, props) then
+                return
+            end
+        end
+        if GetGameTimer() > timeOut then
+            return
+        end
+
+        Wait(50)
+    end
+end)
+
+-- Clear vehicle peds
+---@param vehicle number
+---@param init boolean
+qbx.entityStateHandler('initVehicle', function(vehicle, _, init)
+    if not init then return end
+
+    for i = -1, 0 do
+        local ped = GetPedInVehicleSeat(vehicle, i)
+        if ped ~= cache.ped and ped > 0 and NetworkGetEntityOwner(ped) == cache.playerId then
+            DeleteEntity(ped)
+        end
+    end
+
+    lib.waitFor(function()
+        return not IsEntityWaitingForWorldCollision(vehicle)
+    end)
+
+    if NetworkGetEntityOwner(vehicle) ~= cache.playerId then return end
+
+    local state = Entity(vehicle).state
+
+    SetVehicleOnGroundProperly(vehicle);
+
+    SetTimeout(0, function()
+        state:set('initVehicle', nil, true)
+    end)
 end)

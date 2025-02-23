@@ -1,44 +1,50 @@
 fx_version 'cerulean'
 game 'gta5'
 
-description 'QBX_Core'
+name 'qbx_core'
+description 'The core resource for the Qbox Framework'
 repository 'https://github.com/Qbox-project/qbx_core'
-version '1.2.0'
+version '1.22.5'
+
+ox_lib 'locale'
 
 shared_scripts {
     '@ox_lib/init.lua',
-    'modules/utils.lua',
+    'modules/lib.lua',
     'shared/locale.lua',
-    'locale/en.lua',
-    'locale/*.lua',
+    'shared/functions.lua',
 }
 
 client_scripts {
-    'modules/utils.lua',
     'client/main.lua',
+    'client/groups.lua',
     'client/functions.lua',
     'client/loops.lua',
     'client/events.lua',
     'client/character.lua',
     'client/discord.lua',
+    'client/vehicle-persistence.lua',
     'bridge/qb/client/main.lua',
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
+    'server/motd.lua',
     'server/main.lua',
+    'server/groups.lua',
     'server/functions.lua',
     'server/player.lua',
     'server/events.lua',
     'server/commands.lua',
     'server/loops.lua',
-    'server/storage.lua',
     'server/character.lua',
+    'server/vehicle-persistence.lua',
     'bridge/qb/server/main.lua',
 }
 
 files {
     'modules/*.lua',
+    'data/*.lua',
     'shared/gangs.lua',
     'shared/items.lua',
     'shared/jobs.lua',
@@ -52,10 +58,13 @@ files {
     'bridge/qb/shared/main.lua',
     'bridge/qb/shared/export-function.lua',
     'config/client.lua',
-    'config/shared.lua'
+    'config/shared.lua',
+    'locales/*.json'
 }
 
 dependencies {
+    '/server:10731',
+    '/onesync',
     'ox_lib',
     'oxmysql',
 }

@@ -3,21 +3,118 @@ local defaultSpawn = require 'config.shared'.defaultSpawn
 
 if config.characters.useExternalCharacters then return end
 
-local previewCam = nil
+local previewCam
 local randomLocation = config.characters.locations[math.random(1, #config.characters.locations)]
 
-local randomPedModels = {
-    `a_m_o_soucent_02`,
-    `mp_g_m_pros_01`,
-    `a_m_m_prolhost_01`,
-    `a_f_m_prolhost_01`,
-    `a_f_y_smartcaspat_01`,
-    `a_f_y_runner_01`,
-    `a_f_y_vinewood_04`,
-    `a_f_o_soucent_02`,
-    `a_m_y_cyclist_01`,
-    `a_m_m_hillbilly_02`,
+local randomPeds = {
+    {
+        model = `mp_m_freemode_01`,
+        headOverlays = {
+            beard = {color = 0, style = 0, secondColor = 0, opacity = 1},
+            complexion = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            bodyBlemishes = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            blush = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            lipstick = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            blemishes = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            eyebrows = {color = 0, style = 0, secondColor = 0, opacity = 1},
+            makeUp = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            sunDamage = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            moleAndFreckles = {color = 0, style = 0, secondColor = 0, opacity = 0},
+            chestHair = {color = 0, style = 0, secondColor = 0, opacity = 1},
+            ageing = {color = 0, style = 0, secondColor = 0, opacity = 1},
+        },
+        components = {
+            {texture = 0, drawable = 0, component_id = 0},
+            {texture = 0, drawable = 0, component_id = 1},
+            {texture = 0, drawable = 0, component_id = 2},
+            {texture = 0, drawable = 0, component_id = 5},
+            {texture = 0, drawable = 0, component_id = 7},
+            {texture = 0, drawable = 0, component_id = 9},
+            {texture = 0, drawable = 0, component_id = 10},
+            {texture = 0, drawable = 15, component_id = 11},
+            {texture = 0, drawable = 15, component_id = 8},
+            {texture = 0, drawable = 15, component_id = 3},
+            {texture = 0, drawable = 34, component_id = 6},
+            {texture = 0, drawable = 61, component_id = 4},
+        },
+        props = {
+            {prop_id = 0, drawable = -1, texture = -1},
+            {prop_id = 1, drawable = -1, texture = -1},
+            {prop_id = 2, drawable = -1, texture = -1},
+            {prop_id = 6, drawable = -1, texture = -1},
+            {prop_id = 7, drawable = -1, texture = -1},
+        }
+    },
+    {
+        model = `mp_f_freemode_01`,
+        headBlend = {
+            shapeMix = 0.3,
+            skinFirst = 0,
+            shapeFirst = 31,
+            skinSecond = 0,
+            shapeSecond = 0,
+            skinMix = 0,
+            thirdMix = 0,
+            shapeThird = 0,
+            skinThird = 0,
+        },
+        hair = {
+            color = 0,
+            style = 15,
+            texture = 0,
+            highlight = 0
+        },
+        headOverlays = {
+            chestHair = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            bodyBlemishes = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            beard = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            lipstick = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            complexion = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            blemishes = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            moleAndFreckles = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            makeUp = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            ageing = {secondColor = 0, opacity = 1, color = 0, style = 0},
+            eyebrows = {secondColor = 0, opacity = 1, color = 0, style = 0},
+            blush = {secondColor = 0, opacity = 0, color = 0, style = 0},
+            sunDamage = {secondColor = 0, opacity = 0, color = 0, style = 0},
+        },
+        components = {
+            {drawable = 0, component_id = 0, texture = 0},
+            {drawable = 0, component_id = 1, texture = 0},
+            {drawable = 0, component_id = 2, texture = 0},
+            {drawable = 0, component_id = 5, texture = 0},
+            {drawable = 0, component_id = 7, texture = 0},
+            {drawable = 0, component_id = 9, texture = 0},
+            {drawable = 0, component_id = 10, texture = 0},
+            {drawable = 15, component_id = 3, texture = 0},
+            {drawable = 15, component_id = 11, texture = 3},
+            {drawable = 14, component_id = 8, texture = 0},
+            {drawable = 15, component_id = 4, texture = 3},
+            {drawable = 35, component_id = 6, texture = 0},
+        },
+        props = {
+            {prop_id = 0, drawable = -1, texture = -1},
+            {prop_id = 1, drawable = -1, texture = -1},
+            {prop_id = 2, drawable = -1, texture = -1},
+            {prop_id = 6, drawable = -1, texture = -1},
+            {prop_id = 7, drawable = -1, texture = -1},
+        }
+    }
 }
+
+NetworkStartSoloTutorialSession()
+
+local nationalities = {}
+
+if config.characters.limitNationalities then
+    local nationalityList = lib.load('data.nationalities')
+
+    CreateThread(function()
+        for i = 1, #nationalityList do
+            nationalities[#nationalities + 1] = { value = nationalityList[i] }
+        end
+    end)
+end
 
 local function setupPreviewCam()
     DoScreenFadeIn(1000)
@@ -47,73 +144,79 @@ local function destroyPreviewCam()
     DestroyCam(previewCam, true)
     RenderScriptCams(false, false, 1, true, true)
     FreezeEntityPosition(cache.ped, false)
+    DisplayRadar(true)
+    previewCam = nil
+end
+
+local function randomPed()
+    local ped = randomPeds[math.random(1, #randomPeds)]
+    lib.requestModel(ped.model, config.loadingModelsTimeout)
+    SetPlayerModel(cache.playerId, ped.model)
+    pcall(function() exports['illenium-appearance']:setPedAppearance(PlayerPedId(), ped) end)
+    SetModelAsNoLongerNeeded(ped.model)
 end
 
 ---@param citizenId? string
 local function previewPed(citizenId)
-    if not citizenId then
-        local model = randomPedModels[math.random(1, #randomPedModels)]
-        lib.requestModel(model, config.loadingModelsTimeout)
-        SetPlayerModel(cache.playerId, model)
-        return
-    end
+    if not citizenId then randomPed() return end
 
     local clothing, model = lib.callback.await('qbx_core:server:getPreviewPedData', false, citizenId)
     if model and clothing then
         lib.requestModel(model, config.loadingModelsTimeout)
         SetPlayerModel(cache.playerId, model)
         pcall(function() exports['illenium-appearance']:setPedAppearance(PlayerPedId(), json.decode(clothing)) end)
+        SetModelAsNoLongerNeeded(model)
     else
-        model = randomPedModels[math.random(1, #randomPedModels)]
-        lib.requestModel(model, config.loadingModelsTimeout)
-        SetPlayerModel(cache.playerId, model)
+        randomPed()
     end
 end
 
----@class CharacterRegistration
----@field firstname string
----@field lastname string
----@field nationality string
----@field gender number
----@field birthdate string
----@field cid integer
-
----@return string[]?
+---@return CharacterRegistration?
 local function characterDialog()
-    return lib.inputDialog(Lang:t('info.character_registration_title'), {
+    local nationalityOption = config.characters.limitNationalities and {
+        type = 'select',
+        required = true,
+        icon = 'user-shield',
+        label = locale('info.nationality'),
+        default = 'American',
+        searchable = true,
+        options = nationalities
+    } or {
+        type = 'input',
+        required = true,
+        icon = 'user-shield',
+        label = locale('info.nationality'),
+        placeholder = 'Duck'
+    }
+
+    return lib.inputDialog(locale('info.character_registration_title'), {
         {
             type = 'input',
             required = true,
             icon = 'user-pen',
-            label = Lang:t('info.first_name'),
+            label = locale('info.first_name'),
             placeholder = 'Hank'
         },
         {
             type = 'input',
             required = true,
             icon = 'user-pen',
-            label = Lang:t('info.last_name'),
+            label = locale('info.last_name'),
             placeholder = 'Jordan'
         },
-        {
-            type = 'input',
-            required = true,
-            icon = 'user-shield',
-            label = Lang:t('info.nationality'),
-            placeholder = 'Duck'
-        },
+        nationalityOption,
         {
             type = 'select',
             required = true,
             icon = 'circle-user',
-            label = Lang:t('info.gender'),
-            placeholder = Lang:t('info.select_gender'),
+            label = locale('info.gender'),
+            placeholder = locale('info.select_gender'),
             options = {
                 {
-                    value = Lang:t('info.char_male')
+                    value = locale('info.char_male')
                 },
                 {
-                    value = Lang:t('info.char_female')
+                    value = locale('info.char_female')
                 }
             }
         },
@@ -121,12 +224,12 @@ local function characterDialog()
             type = 'date',
             required = true,
             icon = 'calendar-days',
-            label = Lang:t('info.birth_date'),
-            format = 'YYYY-MM-DD',
+            label = locale('info.birth_date'),
+            format = config.characters.dateFormat,
             returnString = true,
-            min = '1900-01-01', -- Has to be in the same in the same format as the format argument
-            max = '2006-12-31', -- Has to be in the same in the same format as the format argument
-            default = '2006-12-31'
+            min = config.characters.dateMin,
+            max = config.characters.dateMax,
+            default = config.characters.dateMax
         }
     })
 end
@@ -223,7 +326,7 @@ local function createCharacter(cid)
 
     for input = 1, 3 do -- Run through first 3 inputs, aka first name, last name and nationality
         if not checkStrings(dialog, input) then
-            Notify(Lang:t('error.no_match_character_registration'), 'error', 10000)
+            Notify(locale('error.no_match_character_registration'), 'error', 10000)
             goto noMatch
             break
         end
@@ -234,14 +337,13 @@ local function createCharacter(cid)
         firstname = capString(dialog[1]),
         lastname = capString(dialog[2]),
         nationality = capString(dialog[3]),
-        gender = dialog[4] == Lang:t('info.char_male') and 0 or 1,
+        gender = dialog[4] == locale('info.char_male') and 0 or 1,
         birthdate = dialog[5],
         cid = cid
     })
 
     if GetResourceState('qbx_spawn') == 'missing' then
         spawnDefault()
-        TriggerEvent('qb-clothes:client:CreateFirstCharacter')
     else
         if config.characters.startingApartment then
             TriggerEvent('apartments:client:setupSpawnUI', newData)
@@ -255,7 +357,14 @@ local function createCharacter(cid)
 end
 
 local function chooseCharacter()
+    ---@type PlayerEntity[], integer
+    local characters, amount = lib.callback.await('qbx_core:server:getCharacters')
+    local firstCharacterCitizenId = characters[1] and characters[1].citizenid
+    previewPed(firstCharacterCitizenId)
+
     randomLocation = config.characters.locations[math.random(1, #config.characters.locations)]
+    SetFollowPedCamViewMode(2)
+    DisplayRadar(false)
 
     DoScreenFadeOut(500)
 
@@ -267,27 +376,32 @@ local function chooseCharacter()
     Wait(1000)
     SetEntityCoords(cache.ped, randomLocation.pedCoords.x, randomLocation.pedCoords.y, randomLocation.pedCoords.z, false, false, false, false)
     SetEntityHeading(cache.ped, randomLocation.pedCoords.w)
+
+    NetworkStartSoloTutorialSession()
+
+    while not NetworkIsInTutorialSession() do
+        Wait(0)
+    end
+
     Wait(1500)
     ShutdownLoadingScreen()
     ShutdownLoadingScreenNui()
     setupPreviewCam()
 
-    ---@type PlayerEntity[], integer
-    local characters, amount = lib.callback.await('qbx_core:server:getCharacters')
     local options = {}
     for i = 1, amount do
         local character = characters[i]
-        local name = character and character.charinfo.firstname .. ' ' .. character.charinfo.lastname
+        local name = character and ('%s %s'):format(character.charinfo.firstname, character.charinfo.lastname)
         options[i] = {
-            title = character and string.format('%s %s - %s', character.charinfo.firstname, character.charinfo.lastname, character.citizenid) or Lang:t('info.multichar_new_character', { number = i }),
+            title = character and ('%s %s - %s'):format(character.charinfo.firstname, character.charinfo.lastname, character.citizenid) or locale('info.multichar_new_character', i),
             metadata = character and {
                 Name = name,
-                Gender = character.charinfo.gender == 0 and Lang:t('info.char_male') or Lang:t('info.char_female'),
+                Gender = character.charinfo.gender == 0 and locale('info.char_male') or locale('info.char_female'),
                 Birthdate = character.charinfo.birthdate,
                 Nationality = character.charinfo.nationality,
                 ['Account Number'] = character.charinfo.account,
-                Bank = CommaValue(character.money.bank),
-                Cash = CommaValue(character.money.cash),
+                Bank = lib.math.groupdigits(character.money.bank),
+                Cash = lib.math.groupdigits(character.money.cash),
                 Job = character.job.label,
                 ['Job Grade'] = character.job.grade.name,
                 Gang = character.gang.label,
@@ -303,6 +417,7 @@ local function chooseCharacter()
                     local success = createCharacter(i)
                     if success then return end
 
+                    previewPed(firstCharacterCitizenId)
                     lib.showContext('qbx_core_multichar_characters')
                 end
             end
@@ -311,21 +426,21 @@ local function chooseCharacter()
         if character then
             lib.registerContext({
                 id = 'qbx_core_multichar_character_'..i,
-                title = string.format('%s %s - %s', character.charinfo.firstname, character.charinfo.lastname, character.citizenid),
+                title = ('%s %s - %s'):format(character.charinfo.firstname, character.charinfo.lastname, character.citizenid),
                 canClose = false,
                 menu = 'qbx_core_multichar_characters',
                 options = {
                     {
-                        title = Lang:t('info.play'),
-                        description = Lang:t('info.play_description', { playerName = name }),
+                        title = locale('info.play'),
+                        description = locale('info.play_description', name),
                         icon = 'play',
                         onSelect = function()
                             DoScreenFadeOut(10)
                             lib.callback.await('qbx_core:server:loadCharacter', false, character.citizenid)
                             if GetResourceState('qbx_apartments'):find('start') then
-                                TriggerEvent('apartments:client:setupSpawnUI', { citizenid = character.citizenid })
+                                TriggerEvent('apartments:client:setupSpawnUI', character.citizenid)
                             elseif GetResourceState('qbx_spawn'):find('start') then
-                                TriggerEvent('qb-spawn:client:setupSpawns', { citizenid = character.citizenid })
+                                TriggerEvent('qb-spawn:client:setupSpawns', character.citizenid)
                                 TriggerEvent('qb-spawn:client:openUI', true)
                             else
                                 spawnLastLocation()
@@ -334,13 +449,13 @@ local function chooseCharacter()
                         end
                     },
                     config.characters.enableDeleteButton and {
-                        title = Lang:t('info.delete_character'),
-                        description = Lang:t('info.delete_character_description', { playerName = name }),
+                        title = locale('info.delete_character'),
+                        description = locale('info.delete_character_description', name),
                         icon = 'trash',
                         onSelect = function()
                             local alert = lib.alertDialog({
-                                header = Lang:t('info.delete_character'),
-                                content = Lang:t('info.confirm_delete'),
+                                header = locale('info.delete_character'),
+                                content = locale('info.confirm_delete'),
                                 centered = true,
                                 cancel = true
                             })
@@ -360,7 +475,7 @@ local function chooseCharacter()
 
     lib.registerContext({
         id = 'qbx_core_multichar_characters',
-        title = Lang:t('info.multichar_title'),
+        title = locale('info.multichar_title'),
         canClose = false,
         options = options
     })
@@ -393,16 +508,19 @@ RegisterNetEvent('qbx_core:client:playerLoggedOut', function()
 end)
 
 CreateThread(function()
-    local model = randomPedModels[math.random(1, #randomPedModels)]
     while true do
         Wait(0)
         if NetworkIsSessionStarted() then
             pcall(function() exports.spawnmanager:setAutoSpawn(false) end)
             Wait(250)
-            lib.requestModel(model, config.loadingModelsTimeout)
-            SetPlayerModel(cache.playerId, model)
             chooseCharacter()
             break
         end
     end
+    -- since people apparently die during char select. Since SetEntityInvincible is notoriously unreliable, we'll just loop it to be safe. shrug
+    while NetworkIsInTutorialSession() do
+        SetEntityInvincible(PlayerPedId(), true)
+        Wait(250)
+    end
+    SetEntityInvincible(PlayerPedId(), false)
 end)

@@ -3,17 +3,17 @@ function AddDeprecatedFunctions(player)
 
     ---@deprecated call ox_inventory instead
     function player.Functions.GetCardSlot()
-        error("player.Functions.GetCardSlot is unsupported. Call ox_inventory directly")
+        error('player.Functions.GetCardSlot is unsupported. Call ox_inventory directly')
     end
 
     ---@deprecated player.Functions.SetMetaData instead
     function player.Functions.AddField()
-        error("player.Functions.AddField is unsupported. Use player.Functions.SetMetaData instead")
+        error('player.Functions.AddField is unsupported. Use player.Functions.SetMetaData instead')
     end
 
     ---@deprecated
     function player.Functions.AddMethod()
-        error("player.Functions.AddMethod is unsupported")
+        error('player.Functions.AddMethod is unsupported')
     end
 
     return player
@@ -23,42 +23,37 @@ local playerObj = {}
 
 ---@deprecated ox_inventory automatically saves
 ---@param source Source
-function playerObj.SaveInventory(source)
-    if GetResourceState('qb-inventory') == 'missing' then return end
-    exports['qb-inventory']:SaveInventory(source, false)
+function playerObj.SaveInventory(source) -- luacheck: ignore
+    assert(GetResourceState('qb-inventory') ~= 'started', 'qb-inventory is not compatible with qbx_core. use ox_inventory instead')
 end
 
 ---@deprecated ox_inventory automatically saves
 ---@param playerData PlayerData
-function playerObj.SaveOfflineInventory(playerData)
-    if GetResourceState('qb-inventory') == 'missing' then return end
-    exports['qb-inventory']:SaveInventory(playerData, true)
+function playerObj.SaveOfflineInventory(playerData) -- luacheck: ignore
+    assert(GetResourceState('qb-inventory') ~= 'started', 'qb-inventory is not compatible with qbx_core. use ox_inventory instead')
 end
 
 ---@deprecated call ox_inventory exports directly
 ---@param items any[]
 ---@return number?
-function playerObj.GetTotalWeight(items)
-    if GetResourceState('qb-inventory') == 'missing' then return end
-    return exports['qb-inventory']:GetTotalWeight(items)
+function playerObj.GetTotalWeight(items) -- luacheck: ignore
+    assert(GetResourceState('qb-inventory') ~= 'started', 'qb-inventory is not compatible with qbx_core. use ox_inventory instead')
 end
 
 ---@deprecated call ox_inventory exports directly
 ---@param items any[]
 ---@param itemName string
 ---@return integer[]? slots
-function playerObj.GetSlotsByItem(items, itemName)
-    if GetResourceState('qb-inventory') == 'missing' then return end
-    return exports['qb-inventory']:GetSlotsByItem(items, itemName)
+function playerObj.GetSlotsByItem(items, itemName) -- luacheck: ignore
+    assert(GetResourceState('qb-inventory') ~= 'started', 'qb-inventory is not compatible with qbx_core. use ox_inventory instead')
 end
 
 ---@deprecated call ox_inventory exports directly
 ---@param items any[]
 ---@param itemName string
 ---@return integer? slot
-function playerObj.GetFirstSlotByItem(items, itemName)
-    if GetResourceState('qb-inventory') == 'missing' then return end
-    return exports['qb-inventory']:GetFirstSlotByItem(items, itemName)
+function playerObj.GetFirstSlotByItem(items, itemName) -- luacheck: ignore
+    assert(GetResourceState('qb-inventory') ~= 'started', 'qb-inventory is not compatible with qbx_core. use ox_inventory instead')
 end
 
 ---@param source Source
@@ -77,7 +72,7 @@ end
 
 ---@deprecated unsupported. Call Login or CreatePlayer
 function playerObj.CheckPlayerData()
-    error("Unsupported. Call Login or CreatePlayer")
+    error('Unsupported. Call Login or CreatePlayer')
 end
 
 ---On player logout
@@ -91,9 +86,9 @@ end
 ---Will cause major issues!
 ---@param playerData PlayerData
 ---@param Offline boolean
----@return Player player
+---@return Player?
 function playerObj.CreatePlayer(playerData, Offline)
-    AddDeprecatedFunctions(exports.qbx_core:CreatePlayer(playerData, Offline))
+    return AddDeprecatedFunctions(exports.qbx_core:CreatePlayer(playerData, Offline))
 end
 
 ---Save player info to database (make sure citizenid is the primary key in your database)
@@ -123,6 +118,13 @@ end
 ---@return string | number UniqueVal unique value generated
 function playerObj.GenerateUniqueIdentifier(type)
     return exports.qbx_core:GenerateUniqueIdentifier(type)
+end
+
+
+---@deprecated player.GenerateUniqueIdentifier('citizenid') instead
+---@return string citizenid unique citizenid generated
+function playerObj.CreateCitizenId()
+    return exports.qbx_core:GenerateUniqueIdentifier('citizenid')
 end
 
 return playerObj

@@ -8,7 +8,7 @@ return {
         moneyTypes = { cash = 500, bank = 5000, crypto = 0 }, -- type = startamount - Add or remove money types for your server (for ex. blackmoney = 0), remember once added it will not be removed from the database!
         dontAllowMinus = { 'cash', 'crypto' }, -- Money that is not allowed going in minus
         paycheckTimeout = 10, -- The time in minutes that it will give the paycheck
-        paycheckSociety = false -- If true paycheck will come from the society account that the player is employed at, requires qb-management
+        paycheckSociety = false -- If true paycheck will come from the society account that the player is employed at
     },
 
     player = {
@@ -17,7 +17,7 @@ return {
 
         ---@enum BloodType
         bloodTypes = {
-            "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-",
+            'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-',
         },
 
         ---@alias UniqueIdType 'citizenid' | 'AccountNumber' | 'PhoneNumber' | 'FingerId' | 'WalletId' | 'SerialNumber'
@@ -25,7 +25,7 @@ return {
         identifierTypes = {
             citizenid = {
                 valueFunction = function()
-                    return tostring(RandomLetter(3) .. RandomNumber(5)):upper()
+                    return lib.string.random('A.......')
                 end,
             },
             AccountNumber = {
@@ -40,7 +40,7 @@ return {
             },
             FingerId = {
                 valueFunction = function()
-                    return tostring(RandomLetter(2) .. RandomNumber(3) .. RandomLetter(1) .. RandomNumber(2) .. RandomLetter(3) .. RandomNumber(4))
+                    return lib.string.random('...............')
                 end,
             },
             WalletId = {
@@ -56,25 +56,28 @@ return {
         }
     },
 
-
     ---@alias TableName string
     ---@alias ColumnName string
-    ---@type table<TableName, ColumnName>
+    ---@type [TableName, ColumnName][]
     characterDataTables = {
-        players = 'citizenid',
-        apartments = 'citizenid',
-        bank_accounts_new = 'id',
-        crypto_transactions = 'citizenid',
-        phone_invoices = 'citizenid',
-        phone_messages = 'citizenid',
-        playerskins = 'citizenid',
-        player_contacts = 'citizenid',
-        player_houses = 'citizenid',
-        player_mails = 'citizenid',
-        player_outfits = 'citizenid',
-        player_vehicles = 'citizenid',
+        {'properties', 'owner'},
+        {'bank_accounts_new', 'id'},
+        {'playerskins', 'citizenid'},
+        {'player_mails', 'citizenid'},
+        {'player_outfits', 'citizenid'},
+        {'player_vehicles', 'citizenid'},
+        {'player_groups', 'citizenid'},
+        {'players', 'citizenid'},
+        {'npwd_calls', 'identifier'},
+        {'npwd_darkchat_channel_members', 'user_identifier'},
+        {'npwd_marketplace_listings', 'identifier'},
+        {'npwd_messages_participants', 'participant'},
+        {'npwd_notes', 'identifier'},
+        {'npwd_phone_contacts', 'identifier'},
+        {'npwd_phone_gallery', 'identifier'},
+        {'npwd_twitter_profiles', 'identifier'},
+        {'npwd_match_profiles', 'identifier'},
     }, -- Rows to be deleted when the character is deleted
-
 
     server = {
         pvp = true, -- Enable or disable pvp on the server (Ability to shoot other players)
@@ -84,6 +87,7 @@ return {
         whitelistPermission = 'admin', -- Permission that's able to enter the server when the whitelist is on
         discord = '', -- Discord invite link
         checkDuplicateLicense = true, -- Check for duplicate rockstar license on join
+        ---@deprecated use cfg ACE system instead
         permissions = { 'god', 'admin', 'mod' }, -- Add as many groups as you want here after creating them in your server.cfg
     },
 
@@ -95,34 +99,35 @@ return {
         defaultNumberOfCharacters = 3, -- Define maximum amount of default characters (maximum 3 characters defined by default)
     },
 
-    ---@type { name: string, amount: integer, metadata: fun(source: number): table }[]
-    starterItems = { -- Character starting items
-        { name = 'phone', amount = 1 },
-        { name = 'id_card', amount = 1, metadata = function(source)
-                if GetResourceState('qbx_idcard') ~= 'started' then
-                    error('qbx_idcard resource not found. Required to give an id_card as a starting item')
-                end
-                return exports.qbx_idcard:GetMetaLicense(source, {'id_card'})
-            end
+    -- this configuration is for core events only. putting other webhooks here will have no effect
+    logging = {
+        webhook = {
+            ['default'] = nil, -- default
+            ['joinleave'] = nil, -- default
+            ['ooc'] = nil, -- default
+            ['anticheat'] = nil, -- default
+            ['playermoney'] = nil, -- default
         },
-        { name = 'driver_license', amount = 1, metadata = function(source)
-                if GetResourceState('qbx_idcard') ~= 'started' then
-                    error('qbx_idcard resource not found. Required to give an id_card as a starting item')
-                end
-                return exports.qbx_idcard:GetMetaLicense(source, {'driver_license'})
-            end
-        },
+        role = {} -- Role to tag for high priority logs. Roles use <@%roleid> and users/channels are <@userid/channelid>
     },
 
-    giveVehicleKeys = function(src, plate)
-        return exports.qbx_vehiclekeys:GiveKeys(src, plate)
+    giveVehicleKeys = function(src, plate, vehicle)
+        return exports.qbx_vehiclekeys:GiveKeys(src, vehicle)
     end,
 
     getSocietyAccount = function(accountName)
-        return exports.qbx_management:GetAccount(accountName)
+        return exports['Renewed-Banking']:getAccountMoney(accountName)
     end,
-    
+
     removeSocietyMoney = function(accountName, payment)
-        return exports.qbx_management:RemoveMoney(accountName, payment)
-    end
+        return exports['Renewed-Banking']:removeAccountMoney(accountName, payment)
+    end,
+
+    ---Paycheck function
+    ---@param player Player Player object
+    ---@param payment number Payment amount
+    sendPaycheck = function (player, payment)
+        player.Functions.AddMoney('bank', payment)
+        Notify(player.PlayerData.source, locale('info.received_paycheck', payment))
+    end,
 }

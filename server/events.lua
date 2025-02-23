@@ -1,4 +1,9 @@
 local serverConfig = require 'config.server'.server
+local loggingConfig = require 'config.server'.logging
+local serverName = require 'config.shared'.serverName
+local storage = require 'server.storage.main'
+local logger = require 'modules.logger'
+local queue = require 'server.queue'
 
 -- Event Handler
 
@@ -13,13 +18,16 @@ AddEventHandler('chatMessage', function(_, _, message)
 end)
 
 AddEventHandler('playerJoining', function()
-    if not serverConfig.checkDuplicateLicense then return end
     local src = source --[[@as string]]
     local license = GetPlayerIdentifierByType(src, 'license2') or GetPlayerIdentifierByType(src, 'license')
     if not license then return end
+    if queue then
+        queue.removePlayerJoining(license)
+    end
+    if not serverConfig.checkDuplicateLicense then return end
     if usedLicenses[license] then
         Wait(0) -- mandatory wait for the drop reason to show up
-        DropPlayer(src, Lang:t('error.duplicate_license'))
+        DropPlayer(src, locale('error.duplicate_license'))
     else
         usedLicenses[license] = true
     end
@@ -31,29 +39,47 @@ AddEventHandler('playerDropped', function(reason)
     local license = GetPlayerIdentifierByType(src, 'license2') or GetPlayerIdentifierByType(src, 'license')
     if license then usedLicenses[license] = nil end
     if not QBX.Players[src] then return end
-    GlobalState.PlayerCount -= 1
+    GlobalState.PlayerCount = GetNumPlayerIndices()
     local player = QBX.Players[src]
-    TriggerEvent('qb-log:server:CreateLog', 'joinleave', 'Dropped', 'red', '**' .. GetPlayerName(src) .. '** (' .. player.PlayerData.license .. ') left..' ..'\n **Reason:** ' .. reason)
+    player.PlayerData.lastLoggedOut = os.time()
+    logger.log({
+        source = 'qbx_core',
+        webhook = loggingConfig.webhook['joinleave'],
+        event = 'Dropped',
+        color = 'red',
+        message = ('**%s** (%s) left...\n **Reason:** %s'):format(GetPlayerName(src), player.PlayerData.license, reason),
+    })
     player.Functions.Save()
     QBX.Player_Buckets[player.PlayerData.license] = nil
     QBX.Players[src] = nil
 end)
 
----@class Deferrals https://docs.fivem.net/docs/scripting-reference/events/list/playerConnecting/#deferring-connections
----@field defer fun() initialize deferrals for the current resource. Required to wait at least 1 tick before calling other deferrals methods.
----@field update fun(message: string) sends a progress message to the connecting client
----@field presentCard fun(card: unknown|string, cb?: fun(data: unknown, rawData: string)) send an adaptive card to the client https://learn.microsoft.com/en-us/adaptive-cards/authoring-cards/getting-started and capture user input via callback.
----@field done fun(failureReason?: string) finalizes deferrals. If failureReason is present, user will be refused connection and shown reason. Need to wait 1 tick after calling other deferral methods before calling done.
+---@param source Source|string
+---@return table<string, string>
+local function getIdentifiers(source)
+    local identifiers = {}
+
+    for i = 0, GetNumPlayerIdentifiers(source --[[@as string]]) - 1 do
+        local identifier = GetPlayerIdentifier(source --[[@as string]], i)
+        local prefix = identifier:match('([^:]+)')
+
+        if prefix ~= 'ip' then
+            identifiers[prefix] = identifier
+        end
+    end
+
+    return identifiers
+end
 
 -- Player Connecting
----@param name any
+---@param name string
 ---@param _ any
 ---@param deferrals Deferrals
 local function onPlayerConnecting(name, _, deferrals)
     local src = source --[[@as string]]
-    local license
-    local identifiers = GetPlayerIdentifiers(src)
+    local license = GetPlayerIdentifierByType(src, 'license2') or GetPlayerIdentifierByType(src, 'license')
     deferrals.defer()
+    local userId = storage.fetchUserByIdentifier(license)
 
     -- Mandatory wait
     Wait(0)
@@ -64,17 +90,18 @@ local function onPlayerConnecting(name, _, deferrals)
         end
     end
 
-    for _, v in pairs(identifiers) do
-        if string.find(v, 'license2') or string.find(v, 'license') then
-            license = v
-            break
-        end
+    if not license then
+        deferrals.done(locale('error.no_valid_license'))
+    elseif serverConfig.checkDuplicateLicense and usedLicenses[license] then
+        deferrals.done(locale('error.duplicate_license'))
     end
 
-    if not license then
-        deferrals.done(Lang:t('error.no_valid_license'))
-    elseif serverConfig.checkDuplicateLicense and IsLicenseInUse(license) then
-        deferrals.done(Lang:t('error.duplicate_license'))
+    if not userId then
+        local identifiers = getIdentifiers(src)
+
+        identifiers.username = name
+
+        storage.createUser(identifiers)
     end
 
     local databaseTime = os.clock()
@@ -82,19 +109,21 @@ local function onPlayerConnecting(name, _, deferrals)
 
     -- conduct database-dependant checks
     CreateThread(function()
-        deferrals.update(string.format(Lang:t('info.checking_ban'), name))
+        deferrals.update(locale('info.checking_ban', name))
         local success, err = pcall(function()
             local isBanned, Reason = IsPlayerBanned(src --[[@as Source]])
             if isBanned then
+                Wait(0) -- Mandatory wait
                 deferrals.done(Reason)
             end
         end)
 
         if serverConfig.whitelist and success then
-            deferrals.update(string.format(Lang:t('info.checking_whitelisted'), name))
+            deferrals.update(locale('info.checking_whitelisted', name))
             success, err = pcall(function()
                 if not IsWhitelisted(src --[[@as Source]]) then
-                    deferrals.done(Lang:t('error.not_whitelisted'))
+                    Wait(0) -- Mandatory wait
+                    deferrals.done(locale('error.not_whitelisted'))
                 end
             end)
         end
@@ -105,20 +134,30 @@ local function onPlayerConnecting(name, _, deferrals)
         databasePromise:resolve()
     end)
 
+    local onError = function(err)
+        deferrals.done(locale('error.connecting_error'))
+        lib.print.error(err)
+    end
+
     -- wait for database to finish
     databasePromise:next(function()
-        deferrals.update(string.format(Lang:t('info.join_server'), name))
-        deferrals.done()
-    end, function(err)
-        deferrals.done(Lang:t('error.connecting_error'))
-        lib.print.error(err)
-    end)
+        deferrals.update(locale('info.join_server', name, serverName))
+
+        -- Mandatory wait
+        Wait(0)
+
+        if queue then
+            queue.awaitPlayerQueue(src --[[@as Source]], license, deferrals)
+        else
+            deferrals.done()
+        end
+    end, onError):next(function() end, onError)
 
     -- if conducting db checks for too long then raise error
     while databasePromise.state == 0 do
         if os.clock() - databaseTime > 30 then
-            deferrals.done(Lang:t('error.connecting_database_timeout'))
-            error(Lang:t('error.connecting_database_timeout'))
+            deferrals.done(locale('error.connecting_database_timeout'))
+            error(locale('error.connecting_database_timeout'))
             break
         end
         Wait(1000)
@@ -128,6 +167,17 @@ local function onPlayerConnecting(name, _, deferrals)
 end
 
 AddEventHandler('playerConnecting', onPlayerConnecting)
+
+AddEventHandler('onResourceStart', function(resource)
+    if resource ~= cache.resource then return end
+
+    storage.createUsersTable()
+
+    MySQL.query([[
+        ALTER TABLE `players`
+        ADD COLUMN IF NOT EXISTS `userId` INT UNSIGNED DEFAULT NULL AFTER `id`;
+    ]])
+end)
 
 -- New method for checking if logged in across all scripts (optional)
 -- `if LocalPlayer.state.isLoggedIn then` for the client side
@@ -146,26 +196,26 @@ end)
 ---@param reason string
 RegisterNetEvent('QBCore:Server:CloseServer', function(reason)
     local src = source --[[@as Source]]
-    if HasPermission(src, 'admin') then
+    if IsPlayerAceAllowed(src --[[@as string]], 'admin') then
         reason = reason or 'No reason specified'
         serverConfig.closed = true
         serverConfig.closedReason = reason
         for k in pairs(QBX.Players) do
-            if not HasPermission(k, serverConfig.whitelistPermission) then
-                KickWithReason(k, reason, nil, nil)
+            if not IsPlayerAceAllowed(k --[[@as string]], serverConfig.whitelistPermission) then
+                DropPlayer(k --[[@as string]], reason)
             end
         end
     else
-        KickWithReason(src, Lang:t("error.no_permission"), nil, nil)
+        DropPlayer(src --[[@as string]], locale('error.no_permission'))
     end
 end)
 
 RegisterNetEvent('QBCore:Server:OpenServer', function()
     local src = source --[[@as Source]]
-    if HasPermission(src, 'admin') then
+    if IsPlayerAceAllowed(src --[[@as string]], 'admin') then
         serverConfig.closed = false
     else
-        KickWithReason(src, Lang:t("error.no_permission"), nil, nil)
+        DropPlayer(src --[[@as string]], locale('error.no_permission'))
     end
 end)
 
@@ -177,10 +227,38 @@ RegisterNetEvent('QBCore:ToggleDuty', function()
     if not player then return end
     if player.PlayerData.job.onduty then
         player.Functions.SetJobDuty(false)
-        Notify(src, Lang:t('info.off_duty'))
+        Notify(src, locale('info.off_duty'))
     else
         player.Functions.SetJobDuty(true)
-        Notify(src, Lang:t('info.on_duty'))
+        Notify(src, locale('info.on_duty'))
     end
-    TriggerClientEvent('QBCore:Client:SetDuty', src, player.PlayerData.job.onduty)
+end)
+
+---Syncs the player's hunger, thirst, and stress levels with the statebags
+---@param bagName string
+---@param meta 'hunger' | 'thirst' | 'stress'
+---@param value number
+local function playerStateBagCheck(bagName, meta, value)
+    if not value then return end
+    local plySrc = GetPlayerFromStateBagName(bagName)
+    if not plySrc then return end
+    local player = QBX.Players[plySrc]
+    if not player then return end
+    if player.PlayerData.metadata[meta] == value then return end
+    player.Functions.SetMetaData(meta, value)
+end
+
+---@diagnostic disable-next-line: param-type-mismatch
+AddStateBagChangeHandler('hunger', nil, function(bagName, _, value)
+    playerStateBagCheck(bagName, 'hunger', value)
+end)
+
+---@diagnostic disable-next-line: param-type-mismatch
+AddStateBagChangeHandler('thirst', nil, function(bagName, _, value)
+    playerStateBagCheck(bagName, 'thirst', value)
+end)
+
+---@diagnostic disable-next-line: param-type-mismatch
+AddStateBagChangeHandler('stress', nil, function(bagName, _, value)
+    playerStateBagCheck(bagName, 'stress', value)
 end)
